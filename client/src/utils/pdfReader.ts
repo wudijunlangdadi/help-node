@@ -1,11 +1,14 @@
 import * as pdfjsLib from 'pdfjs-dist'
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry?url'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
+// Disable worker - run in main thread (fine for text extraction)
+pdfjsLib.GlobalWorkerOptions.workerSrc = ''
 
 export async function extractTextFromPDF(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  const pdf = await pdfjsLib.getDocument({
+    data: arrayBuffer,
+    isEvalSupported: false,
+  }).promise
 
   const textParts: string[] = []
 
