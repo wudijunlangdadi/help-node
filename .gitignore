@@ -1,0 +1,25 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+*.db
+*.sqlite
+.DS_Store
+Thumbs.db
+
+# Android build
+client/android/app/build/
+client/android/.gradle/
+client/android/build/
+client/android/capacitor-cordova-android-plugins/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude
+.claude/settings.local.json

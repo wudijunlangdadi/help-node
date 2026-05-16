@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  practices  Practice[]
+  documents  Document[]
+}
+
+model Article {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  mode      String   // "english" | "chinese" | "code"
+  language  String   // "en" | "zh" | "python"
+  source    String   @default("builtin") // "builtin" | "user"
+  userId    String?
+  createdAt DateTime @default(now())
+
+  practices Practice[]
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  content   String
+  fileType  String   // "txt" | "pdf" | "docx"
+  mode      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Practice {
+  id         String   @id @default(uuid())
+  userId     String
+  articleId  String?
+  mode       String
+  wpm        Float
+  accuracy   Float
+  errorCount Int
+  duration   Int      // seconds
+  errorChars String   // JSON: {"a": 3, "b": 1, ...}
+  createdAt  DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  article Article? @relation(fields: [articleId], references: [id])
+}
