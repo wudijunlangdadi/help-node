@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useRef } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { TypingArea } from '../components/TypingEngine/TypingArea'
 import { FontSizeControl } from '../components/Practice/FontSizeControl'
@@ -29,7 +29,6 @@ export default function PracticePage() {
   } = useSessionStore()
   const importStore = useImportStore()
 
-  const [key, setKey] = useState(0)
   const initializedRef = useRef(false)
 
   // Initialize session
@@ -49,11 +48,7 @@ export default function PracticePage() {
 
       // Resume from last position
       if (imported.lastSegmentIndex > 0) {
-        // Need to wait for segments to be set, then resume
-        setTimeout(() => {
-          resumeFromSegment(imported.lastSegmentIndex)
-          setKey((k) => k + 1)
-        }, 0)
+        resumeFromSegment(imported.lastSegmentIndex)
       }
 
       initializedRef.current = true
@@ -100,13 +95,10 @@ export default function PracticePage() {
     if (importId) {
       importStore.updateProgress(importId, currentSegmentIndex + 1)
     }
-
-    setKey((k) => k + 1)
   }, [completeSegment, importId, currentSegmentIndex, importStore])
 
   const handleJumpToSegment = useCallback((index: number) => {
     resumeFromSegment(index)
-    setKey((k) => k + 1)
   }, [resumeFromSegment])
 
   const handleBack = () => {
@@ -155,7 +147,6 @@ export default function PracticePage() {
 
       {/* Typing area */}
       <TypingArea
-        key={`${key}-${currentSegmentIndex}`}
         text={currentSegment}
         mode={mode}
         onFinish={handleFinish}

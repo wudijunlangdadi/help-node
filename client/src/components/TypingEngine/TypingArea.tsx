@@ -27,24 +27,14 @@ export function TypingArea({ text, mode, onFinish }: Props) {
       const active = document.activeElement
       if (active && active !== inputRef.current && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return
 
-      // Re-focus our hidden input if needed
+      // Re-focus our hidden input so it receives the event naturally
       if (document.activeElement !== inputRef.current) {
         inputRef.current?.focus()
       }
-
-      // Forward the event to our handler
-      if (inputRef.current) {
-        inputRef.current.dispatchEvent(new KeyboardEvent('keydown', {
-          key: e.key,
-          code: e.code,
-          keyCode: e.keyCode,
-          bubbles: true,
-        }))
-      }
     }
 
-    document.addEventListener('keydown', handleGlobalKeyDown)
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown)
+    document.addEventListener('keydown', handleGlobalKeyDown, { capture: true })
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
   }, [])
 
   // Move input to current character position so IME candidate box follows
@@ -95,7 +85,7 @@ export function TypingArea({ text, mode, onFinish }: Props) {
     if (state.status === 'finished') {
       const result = getResult()
       if (result) {
-        setTimeout(() => onFinish(result), 300)
+        onFinish(result)
       }
     }
   }, [state.status, getResult, onFinish])

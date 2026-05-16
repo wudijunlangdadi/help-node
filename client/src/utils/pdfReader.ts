@@ -1,37 +1,11 @@
-// Load pdfjs-dist from CDN at runtime
-let pdfjsLoaded = false
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry?url'
 
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve()
-      return
-    }
-    const script = document.createElement('script')
-    script.src = src
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error(`Failed to load ${src}`))
-    document.head.appendChild(script)
-  })
-}
-
-async function ensurePdfJs(): Promise<any> {
-  if (!pdfjsLoaded) {
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js')
-    pdfjsLoaded = true
-  }
-  // pdfjsLib is exposed as a global by the UMD build
-  const lib = (window as any).pdfjsLib
-  if (!lib) throw new Error('pdf.js failed to load')
-  lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js'
-  return lib
-}
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 export async function extractTextFromPDF(file: File): Promise<string> {
-  const lib = await ensurePdfJs()
-
   const arrayBuffer = await file.arrayBuffer()
-  const pdf = await lib.getDocument({ data: arrayBuffer }).promise
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
 
   const textParts: string[] = []
 

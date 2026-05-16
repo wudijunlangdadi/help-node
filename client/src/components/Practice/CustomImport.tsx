@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePracticeStore } from '../../stores/practiceStore'
 import { useImportStore } from '../../stores/importStore'
-import { extractTextFromPDF } from '../../utils/pdfReader'
 
 export function CustomImport() {
   const navigate = useNavigate()
@@ -43,21 +42,35 @@ export function CustomImport() {
     try {
       let text = ''
       let title = ''
+      const name = file.name
 
-      if (file.name.endsWith('.txt') || file.type === 'text/plain') {
+      if (name.endsWith('.txt') || file.type === 'text/plain') {
         text = await file.text()
-        title = file.name.replace(/\.txt$/i, '')
-      } else if (file.name.endsWith('.pdf') || file.type === 'application/pdf') {
+        title = name.replace(/\.txt$/i, '')
+      } else if (name.endsWith('.pdf') || file.type === 'application/pdf') {
+        const { extractTextFromPDF } = await import('../../utils/pdfReader')
         text = await extractTextFromPDF(file)
-        title = file.name.replace(/\.pdf$/i, '')
+        title = name.replace(/\.pdf$/i, '')
+      } else if (name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const { extractTextFromDOCX } = await import('../../utils/docxReader')
+        text = await extractTextFromDOCX(file)
+        title = name.replace(/\.docx$/i, '')
+      } else if (name.endsWith('.doc')) {
+        setError('暂不支持 .doc 格式，请转换为 .docx 后重试')
+        return
       } else {
-        setError('支持 .txt 和 .pdf 文件')
+        setError('支持 .txt / .pdf / .docx 文件')
+        return
+      }
+
+      if (!text.trim()) {
+        setError('未能从文件中提取到文本内容')
         return
       }
 
       handleImport(title, text)
     } catch (err) {
-      setError('文件读取失败，请检查文件格式')
+      setError(`文件读取失败: ${err instanceof Error ? err.message : '未知错误'}`)
       console.error('File read error:', err)
     } finally {
       setLoading(false)
@@ -96,12 +109,12 @@ export function CustomImport() {
           color: 'var(--text-secondary)',
         }}
       >
-        {loading ? '读取中...' : '📄 导入文件 (txt / pdf)'}
+        {loading ? '读取中...' : '📄 导入文件 (txt / pdf / docx)'}
       </button>
       <input
         ref={fileInputRef}
         type="file"
-        accept=".txt,.pdf"
+        accept=".txt,.pdf,.docx"
         onChange={handleFileUpload}
         className="hidden"
       />
