@@ -39,33 +39,32 @@ export function segmentText(
 }
 
 function splitEnglish(text: string, maxLen: number): string[] {
-  // 1. Split by paragraphs
+  // Split by paragraphs, preserving newlines within
   const paragraphs = text.split(/\n\n+/)
   return mergeSmallSegments(paragraphs, maxLen, (chunk) =>
     splitByRegex(chunk, maxLen, /(?<=[.!?])\s+(?=[A-Z])/)
-  )
+  , '\n\n')
 }
 
 function splitChinese(text: string, maxLen: number): string[] {
-  // 1. Split by paragraphs
   const paragraphs = text.split(/\n\n+/)
   return mergeSmallSegments(paragraphs, maxLen, (chunk) =>
     splitByRegex(chunk, maxLen, /(?<=[。！？；])\s*/)
-  )
+  , '\n\n')
 }
 
 function splitCode(text: string, maxLen: number): string[] {
-  // 1. Split by blank lines
   const blocks = text.split(/\n\s*\n/)
   return mergeSmallSegments(blocks, maxLen, (chunk) =>
     splitByRegex(chunk, maxLen, /(?<=\n)(?=(?:def |class |function |const |let |var |import |export ))/)
-  )
+  , '\n\n')
 }
 
 function mergeSmallSegments(
   chunks: string[],
   maxLen: number,
-  splitFurther: (chunk: string) => string[]
+  splitFurther: (chunk: string) => string[],
+  separator: string = '\n\n'
 ): string[] {
   const result: string[] = []
   let buffer = ''
@@ -74,8 +73,8 @@ function mergeSmallSegments(
     const trimmed = chunk.trim()
     if (!trimmed) continue
 
-    if (buffer.length + trimmed.length + 1 <= maxLen) {
-      buffer = buffer ? `${buffer}\n\n${trimmed}` : trimmed
+    if (buffer.length + trimmed.length + separator.length <= maxLen) {
+      buffer = buffer ? `${buffer}${separator}${trimmed}` : trimmed
     } else {
       if (buffer) {
         result.push(buffer)
@@ -108,8 +107,9 @@ function splitByRegex(text: string, maxLen: number, regex: RegExp): string[] {
     const trimmed = part.trim()
     if (!trimmed) continue
 
-    if (buffer.length + trimmed.length + 1 <= maxLen) {
-      buffer = buffer ? `${buffer} ${trimmed}` : trimmed
+    const sep = buffer.endsWith('\n') ? '' : ' '
+    if (buffer.length + trimmed.length + sep.length <= maxLen) {
+      buffer = buffer ? `${buffer}${sep}${trimmed}` : trimmed
     } else {
       if (buffer) result.push(buffer)
       buffer = trimmed

@@ -188,6 +188,13 @@ export function TypingArea({ text, mode, onFinish }: Props) {
       return
     }
 
+    // Enter key - treat as newline character
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleChar('\n')
+      return
+    }
+
     // Ignore modifier and non-printable keys
     if (e.ctrlKey || e.altKey || e.metaKey) return
     if (e.key.length !== 1) return
