@@ -6,7 +6,17 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https'
-  }
+  },
+  android: {
+    // Allow WebView to handle keyboard input from Bluetooth devices
+    allowMixedContent: true,
+  },
+  plugins: {
+    Keyboard: {
+      resize: 'none',
+      style: 'dark',
+    },
+  },
 };
 
 export default config;

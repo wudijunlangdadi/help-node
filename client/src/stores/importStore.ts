@@ -42,7 +42,9 @@ export const useImportStore = create<ImportState>((set, get) => ({
   addText: (title, content, mode) => {
     const segments = segmentText(content, mode)
     const tocItems = detectTOC(content, mode, segments)
-    const id = crypto.randomUUID()
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 
     const newText: ImportedText = {
       id,

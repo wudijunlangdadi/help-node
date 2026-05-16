@@ -18,9 +18,33 @@ export function TypingArea({ text, mode, onFinish }: Props) {
   const lastScrollIndex = useRef(-1)
   const [isComposing, setIsComposing] = useState(false)
 
-  // Auto-focus
+  // Auto-focus and global keyboard handler for Android Bluetooth keyboard
   useEffect(() => {
     inputRef.current?.focus()
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Only handle when no other input/textarea is focused
+      const active = document.activeElement
+      if (active && active !== inputRef.current && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return
+
+      // Re-focus our hidden input if needed
+      if (document.activeElement !== inputRef.current) {
+        inputRef.current?.focus()
+      }
+
+      // Forward the event to our handler
+      if (inputRef.current) {
+        inputRef.current.dispatchEvent(new KeyboardEvent('keydown', {
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode,
+          bubbles: true,
+        }))
+      }
+    }
+
+    document.addEventListener('keydown', handleGlobalKeyDown)
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown)
   }, [])
 
   // Move input to current character position so IME candidate box follows
@@ -310,13 +334,18 @@ export function TypingArea({ text, mode, onFinish }: Props) {
           onPaste={handlePaste}
           style={{
             position: 'fixed',
-            opacity: 0.01, // Nearly invisible but still recognized by browser for IME
-            width: '10px',
-            height: '20px',
-            top: 0,
-            left: 0,
+            opacity: 0.01,
+            width: '1px',
+            height: '1px',
+            top: '50%',
+            left: '50%',
             zIndex: 9999,
             fontSize: '16px', // Prevent iOS zoom
+            caretColor: 'transparent',
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
+            color: 'transparent',
           }}
           autoFocus
           autoComplete="off"

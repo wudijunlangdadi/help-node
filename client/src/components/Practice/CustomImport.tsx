@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePracticeStore } from '../../stores/practiceStore'
 import { useImportStore } from '../../stores/importStore'
+import { extractTextFromPDF } from '../../utils/pdfReader'
 
 export function CustomImport() {
   const navigate = useNavigate()
@@ -11,29 +12,58 @@ export function CustomImport() {
   const [showTextInput, setShowTextInput] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [titleInput, setTitleInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleImport = (title: string, content: string) => {
-    const id = addText(title, content, mode)
-    setTextInput('')
-    setTitleInput('')
-    setShowTextInput(false)
-    navigate(`/practice?importId=${id}`)
+    if (!content.trim()) {
+      setError('文件内容为空')
+      return
+    }
+    try {
+      const id = addText(title, content, mode)
+      setTextInput('')
+      setTitleInput('')
+      setShowTextInput(false)
+      setError('')
+      navigate(`/practice?importId=${id}`)
+    } catch (err) {
+      setError('导入失败，请重试')
+      console.error('Import error:', err)
+    }
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
-      const text = await file.text()
-      const title = file.name.replace(/\.txt$/i, '')
-      handleImport(title, text)
-    } else {
-      alert('PDF 和 Word 文件需要上传到服务器解析，此功能将在后端完成后启用')
-    }
+    setLoading(true)
+    setError('')
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
+    try {
+      let text = ''
+      let title = ''
+
+      if (file.name.endsWith('.txt') || file.type === 'text/plain') {
+        text = await file.text()
+        title = file.name.replace(/\.txt$/i, '')
+      } else if (file.name.endsWith('.pdf') || file.type === 'application/pdf') {
+        text = await extractTextFromPDF(file)
+        title = file.name.replace(/\.pdf$/i, '')
+      } else {
+        setError('支持 .txt 和 .pdf 文件')
+        return
+      }
+
+      handleImport(title, text)
+    } catch (err) {
+      setError('文件读取失败，请检查文件格式')
+      console.error('File read error:', err)
+    } finally {
+      setLoading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -50,21 +80,28 @@ export function CustomImport() {
         自定义文本
       </h4>
 
+      {error && (
+        <div className="text-xs px-3 py-2 rounded-lg" style={{ color: 'var(--error)', backgroundColor: 'rgba(239,68,68,0.1)' }}>
+          {error}
+        </div>
+      )}
+
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+        disabled={loading}
+        className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
         style={{
           backgroundColor: 'var(--bg-primary)',
           border: '1px dashed var(--border)',
           color: 'var(--text-secondary)',
         }}
       >
-        📄 导入文件 (txt)
+        {loading ? '读取中...' : '📄 导入文件 (txt / pdf)'}
       </button>
       <input
         ref={fileInputRef}
         type="file"
-        accept=".txt,.pdf,.docx"
+        accept=".txt,.pdf"
         onChange={handleFileUpload}
         className="hidden"
       />
