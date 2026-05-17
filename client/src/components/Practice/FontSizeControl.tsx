@@ -4,31 +4,30 @@ export function FontSizeControl() {
   const { fontSize, decreaseFontSize, increaseFontSize } = useSettingsStore()
 
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex items-center gap-1">
       <button
         onClick={decreaseFontSize}
-        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-        style={{
-          backgroundColor: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          color: 'var(--text-primary)',
-        }}
+        className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-tertiary)]"
+        style={{ color: 'var(--text-muted)' }}
+        aria-label="减小字号"
       >
-        A-
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <text x="2" y="12" fontSize="10" fontWeight="600" fill="currentColor">A</text>
+          <line x1="10" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
       </button>
-      <span className="w-10 text-center" style={{ color: 'var(--text-muted)' }}>
-        {fontSize}
-      </span>
+      <span className="text-caption text-xs w-6 text-center tabular-nums">{fontSize}</span>
       <button
         onClick={increaseFontSize}
-        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-        style={{
-          backgroundColor: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          color: 'var(--text-primary)',
-        }}
+        className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-tertiary)]"
+        style={{ color: 'var(--text-muted)' }}
+        aria-label="增大字号"
       >
-        A+
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <text x="1" y="12" fontSize="10" fontWeight="600" fill="currentColor">A</text>
+          <line x1="9" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="11" y1="6" x2="11" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
       </button>
     </div>
   )

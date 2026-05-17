@@ -39,7 +39,7 @@ export default function App() {
     <BrowserRouter>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <Header />
-        <main className="flex-1">
+        <main className="flex-1 flex flex-col">
           <Suspense fallback={<Loading />}>
             <Routes>
               <Route path="/" element={<ModePage />} />

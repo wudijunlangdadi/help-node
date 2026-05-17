@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePracticeStore } from '../../stores/practiceStore'
 import { useImportStore } from '../../stores/importStore'
+import type { TOCItem } from '../../utils/segmentation'
 
 export function CustomImport() {
   const navigate = useNavigate()
@@ -14,13 +15,13 @@ export function CustomImport() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleImport = (title: string, content: string) => {
+  const handleImport = (title: string, content: string, pdfTocItems?: TOCItem[]) => {
     if (!content.trim()) {
       setError('文件内容为空')
       return
     }
     try {
-      const id = addText(title, content, mode)
+      const id = addText(title, content, mode, pdfTocItems)
       setTextInput('')
       setTitleInput('')
       setShowTextInput(false)
@@ -42,6 +43,7 @@ export function CustomImport() {
     try {
       let text = ''
       let title = ''
+      let pdfTocItems: TOCItem[] | undefined
       const name = file.name
 
       if (name.endsWith('.txt') || file.type === 'text/plain') {
@@ -49,7 +51,9 @@ export function CustomImport() {
         title = name.replace(/\.txt$/i, '')
       } else if (name.endsWith('.pdf') || file.type === 'application/pdf') {
         const { extractTextFromPDF } = await import('../../utils/pdfReader')
-        text = await extractTextFromPDF(file)
+        const result = await extractTextFromPDF(file)
+        text = result.text
+        pdfTocItems = result.tocItems
         title = name.replace(/\.pdf$/i, '')
       } else if (name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         const { extractTextFromDOCX } = await import('../../utils/docxReader')
@@ -68,7 +72,7 @@ export function CustomImport() {
         return
       }
 
-      handleImport(title, text)
+      handleImport(title, text, pdfTocItems)
     } catch (err) {
       setError(`文件读取失败: ${err instanceof Error ? err.message : '未知错误'}`)
       console.error('File read error:', err)

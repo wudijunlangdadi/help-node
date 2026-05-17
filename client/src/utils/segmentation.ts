@@ -3,6 +3,8 @@ import type { PracticeMode } from '../types'
 export interface TOCItem {
   title: string
   segmentIndex: number
+  charOffset?: number // Used by PDF outline to map to segments
+  level?: number // Hierarchy depth: 0 = chapter, 1 = section, 2 = subsection
 }
 
 const DEFAULT_MAX_LENGTH: Record<PracticeMode, number> = {
@@ -120,24 +122,30 @@ function splitByRegex(text: string, maxLen: number, regex: RegExp): string[] {
   return result.length > 0 ? result : [text]
 }
 
-// TOC detection patterns by mode
-const TOC_PATTERNS: Record<PracticeMode, RegExp[]> = {
+// TOC detection patterns by mode, with level: 0 = chapter, 1 = section, 2 = subsection
+const TOC_PATTERNS: Record<PracticeMode, { regex: RegExp; level: number }[]> = {
   english: [
-    /^(?:chapter|CHAPTER|Chapter)\s+[\dIVXLC]+/m,
-    /^(?:part|PART|Part)\s+[\dIVXLC]+/m,
-    /^(?:section|SECTION|Section)\s+[\dIVXLC]+/m,
-    /^\d+\.\s+[A-Z]/m,
+    { regex: /^(?:chapter|CHAPTER|Chapter)\s+[\dIVXLC]+/, level: 0 },
+    { regex: /^(?:part|PART|Part)\s+[\dIVXLC]+/, level: 0 },
+    { regex: /^(?:section|SECTION|Section)\s+[\dIVXLC]+/, level: 1 },
+    { regex: /^\d+\.\d+\.\d+\s+/, level: 2 },
+    { regex: /^\d+\.\d+\s+/, level: 1 },
+    { regex: /^\d+\.\s+[A-Z]/, level: 1 },
   ],
   chinese: [
-    /^第[一二三四五六七八九十百千\d]+[章回节篇]/m,
-    /^[一二三四五六七八九十]+[、.．]/m,
-    /^\d+[、.．]\s*\S/m,
+    { regex: /^第[一二三四五六七八九十百千\d]+[章回篇]/, level: 0 },
+    { regex: /^第[一二三四五六七八九十百千\d]+[节]/, level: 1 },
+    { regex: /^[一二三四五六七八九十]+[、.．]/, level: 1 },
+    { regex: /^\d+\.\d+\.\d+[\s.．]/, level: 2 },
+    { regex: /^\d+\.\d+[\s.．]/, level: 1 },
+    { regex: /^\d+[、.．]\s*\S/, level: 1 },
   ],
   code: [
-    /^#{2,}\s+\S/m,
-    /^={3,}\s*$/m,
-    /^def\s+\w+/m,
-    /^class\s+\w+/m,
+    { regex: /^#{2}\s+\S/, level: 0 },
+    { regex: /^#{3}\s+\S/, level: 1 },
+    { regex: /^={3,}\s*$/, level: 0 },
+    { regex: /^def\s+\w+/, level: 1 },
+    { regex: /^class\s+\w+/, level: 0 },
   ],
 }
 
@@ -146,23 +154,66 @@ export function detectTOC(text: string, mode: PracticeMode, segments: string[]):
   const items: TOCItem[] = []
   const lines = text.split('\n')
 
-  for (const line of lines) {
-    const trimmed = line.trim()
+  // Pre-process: join standalone numbers with their title on the next line (PDF TOC format)
+  const mergedLines: { text: string; sourceIndex: number }[] = []
+  let i = 0
+  while (i < lines.length) {
+    const trimmed = lines[i].trim()
+    if (!trimmed) { i++; continue }
+
+    // Standalone section numbers (from PDF TOC extraction): "2.1", "2.1.1", "3"
+    // Combine with the next non-empty line as title
+    const isStandaloneSubsection = /^\d+\.\d+\.\d+$/.test(trimmed)
+    const isStandaloneSection = /^\d+\.\d+$/.test(trimmed)
+    const isStandaloneChapter = /^\d+$/.test(trimmed) && parseInt(trimmed) <= 50
+
+    if (isStandaloneSubsection || isStandaloneSection || (isStandaloneChapter && mode === 'chinese')) {
+      // Look ahead for the next non-empty, non-number, non-dot-leader line
+      let j = i + 1
+      while (j < lines.length) {
+        const next = lines[j].trim()
+        if (!next) { j++; continue }
+        // Skip dot leaders and page numbers
+        if (/^[.\s·]+$/.test(next) || /^\d+$/.test(next)) { j++; continue }
+        // Found a title
+        mergedLines.push({ text: `${trimmed} ${next}`, sourceIndex: i })
+        i = j + 1
+        break
+      }
+      if (j >= lines.length) {
+        mergedLines.push({ text: trimmed, sourceIndex: i })
+        i++
+      }
+      continue
+    }
+
+    mergedLines.push({ text: trimmed, sourceIndex: i })
+    i++
+  }
+
+  for (const { text: lineText, sourceIndex } of mergedLines) {
+    const trimmed = lineText.trim()
     if (!trimmed) continue
 
-    const isMatch = patterns.some((p) => p.test(trimmed))
-    if (!isMatch) continue
+    // Find the first matching pattern and its level
+    let level = -1
+    for (const p of patterns) {
+      if (p.regex.test(trimmed)) {
+        level = p.level
+        break
+      }
+    }
+    if (level === -1) continue
 
-    // Find which segment contains this line
-    const lineIndex = text.indexOf(trimmed)
-    if (lineIndex === -1) continue
+    // Find which segment contains this line using the source line index
+    const charOffset = lines.slice(0, sourceIndex).join('\n').length + (sourceIndex > 0 ? 1 : 0)
 
     let segmentIndex = 0
     let charCount = 0
-    for (let i = 0; i < segments.length; i++) {
-      charCount += segments[i].length
-      if (lineIndex < charCount) {
-        segmentIndex = i
+    for (let si = 0; si < segments.length; si++) {
+      charCount += segments[si].length
+      if (charOffset < charCount) {
+        segmentIndex = si
         break
       }
     }
@@ -175,6 +226,7 @@ export function detectTOC(text: string, mode: PracticeMode, segments: string[]):
     items.push({
       title: trimmed.length > 40 ? trimmed.substring(0, 40) + '...' : trimmed,
       segmentIndex,
+      level,
     })
   }
 

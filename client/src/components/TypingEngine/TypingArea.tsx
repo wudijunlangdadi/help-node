@@ -8,9 +8,11 @@ interface Props {
   text: string
   mode: PracticeMode
   onFinish: (result: TypingResult) => void
+  initialIndex?: number
+  onProgress?: (currentIndex: number) => void
 }
 
-export function TypingArea({ text, mode, onFinish }: Props) {
+export function TypingArea({ text, mode, onFinish, initialIndex, onProgress }: Props) {
   const { state, handleChar, handleBackspace, setIndex, reset, getResult } = useTypingEngine(text, mode)
   const fontSize = useSettingsStore((s) => s.fontSize)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -18,24 +20,76 @@ export function TypingArea({ text, mode, onFinish }: Props) {
   const lastScrollIndex = useRef(-1)
   const [isComposing, setIsComposing] = useState(false)
 
-  // Auto-focus and global keyboard handler for Android Bluetooth keyboard
+  // Restore initial index on mount
+  useEffect(() => {
+    if (initialIndex && initialIndex > 0 && initialIndex < text.length) {
+      setIndex(initialIndex)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Report progress
+  useEffect(() => {
+    onProgress?.(state.currentIndex)
+  }, [state.currentIndex, onProgress])
+
+  // Global keyboard handler — works on desktop + Bluetooth keyboard
   useEffect(() => {
     inputRef.current?.focus()
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Only handle when no other input/textarea is focused
+      if (isComposing) return
+
       const active = document.activeElement
       if (active && active !== inputRef.current && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return
 
-      // Re-focus our hidden input so it receives the event naturally
       if (document.activeElement !== inputRef.current) {
         inputRef.current?.focus()
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleChar('\n')
+        return
+      }
+
+      if (e.key === 'Backspace') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleBackspace()
+        return
       }
     }
 
     document.addEventListener('keydown', handleGlobalKeyDown, { capture: true })
     return () => document.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
-  }, [])
+  }, [handleChar, handleBackspace, isComposing])
+
+  // beforeinput fallback for Android WebView — catches Enter/Backspace that keydown misses
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+
+    const handleBeforeInput = (e: InputEvent) => {
+      const type = e.inputType
+      if (type === 'insertLineBreak' || type === 'insertParagraph') {
+        e.preventDefault()
+        handleChar('\n')
+        // Clear any inserted content
+        if (inputRef.current) inputRef.current.value = ''
+        return
+      }
+      if (type === 'deleteContentBackward' || type === 'deleteWordBackward') {
+        e.preventDefault()
+        handleBackspace()
+        if (inputRef.current) inputRef.current.value = ''
+        return
+      }
+    }
+
+    el.addEventListener('beforeinput', handleBeforeInput as EventListener)
+    return () => el.removeEventListener('beforeinput', handleBeforeInput as EventListener)
+  }, [handleChar, handleBackspace])
 
   // Move input to current character position so IME candidate box follows
   useEffect(() => {
@@ -46,8 +100,6 @@ export function TypingArea({ text, mode, onFinish }: Props) {
     const currentChar = container.querySelector(`[data-char-index="${state.currentIndex}"]`)
     if (currentChar) {
       const charRect = currentChar.getBoundingClientRect()
-
-      // Use fixed positioning relative to viewport for accurate IME placement
       input.style.position = 'fixed'
       input.style.top = `${charRect.bottom + 2}px`
       input.style.left = `${charRect.left}px`
@@ -104,7 +156,6 @@ export function TypingArea({ text, mode, onFinish }: Props) {
       : currentRect.bottom + currentRect.height / 2
     const targetX = currentRect.left + currentRect.width / 2
 
-    // Find the character closest to the target position
     const allChars = container.querySelectorAll('[data-char-index]')
     let closestIndex = state.currentIndex
     let closestDistance = Infinity
@@ -114,10 +165,8 @@ export function TypingArea({ text, mode, onFinish }: Props) {
       const charY = rect.top + rect.height / 2
       const charX = rect.left + rect.width / 2
 
-      // Must be on the target line (within half a line height)
       if (Math.abs(charY - targetY) > rect.height * 0.6) continue
 
-      // Find closest X position
       const distance = Math.abs(charX - targetX)
       if (distance < closestDistance) {
         closestDistance = distance
@@ -128,12 +177,13 @@ export function TypingArea({ text, mode, onFinish }: Props) {
     return closestIndex
   }, [state.currentIndex])
 
-  // Handle keyboard events
+  // Handle keyboard events on the hidden input (for regular characters and IME)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // During composition (IME active), don't process
     if (isComposing) return
 
-    // Arrow keys for cursor movement
+    // Enter and Backspace are handled by global listener, skip here
+    if (e.key === 'Enter' || e.key === 'Backspace') return
+
     if (e.key === 'ArrowLeft') {
       e.preventDefault()
       setIndex(state.currentIndex - 1)
@@ -148,29 +198,24 @@ export function TypingArea({ text, mode, onFinish }: Props) {
 
     if (e.key === 'ArrowUp') {
       e.preventDefault()
-      const newIndex = findCharAtSamePosition('up')
-      setIndex(newIndex)
+      setIndex(findCharAtSamePosition('up'))
       return
     }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      const newIndex = findCharAtSamePosition('down')
-      setIndex(newIndex)
+      setIndex(findCharAtSamePosition('down'))
       return
     }
 
-    // Home key - go to beginning
     if (e.key === 'Home') {
       e.preventDefault()
       setIndex(0)
       return
     }
 
-    // End key - go to end of typed content
     if (e.key === 'End') {
       e.preventDefault()
-      // Find the last non-pending character
       let lastTyped = 0
       for (let i = state.charStates.length - 1; i >= 0; i--) {
         if (state.charStates[i] !== 'pending') {
@@ -182,24 +227,9 @@ export function TypingArea({ text, mode, onFinish }: Props) {
       return
     }
 
-    if (e.key === 'Backspace') {
-      e.preventDefault()
-      handleBackspace()
-      return
-    }
-
-    // Enter key - treat as newline character
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleChar('\n')
-      return
-    }
-
-    // Ignore modifier and non-printable keys
     if (e.ctrlKey || e.altKey || e.metaKey) return
     if (e.key.length !== 1) return
 
-    // Prevent default for space to avoid scrolling
     if (e.key === ' ') {
       e.preventDefault()
     }
@@ -207,27 +237,23 @@ export function TypingArea({ text, mode, onFinish }: Props) {
     handleChar(e.key)
   }
 
-  // Handle IME composition
   const handleCompositionStart = () => {
     setIsComposing(true)
   }
 
   const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
     setIsComposing(false)
-    // Process the composed characters
     const composedText = e.data
     if (composedText) {
       for (const char of composedText) {
         handleChar(char)
       }
     }
-    // Clear the input
     if (inputRef.current) {
       inputRef.current.value = ''
     }
   }
 
-  // Handle paste events
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault()
     const pastedText = e.clipboardData.getData('text')
@@ -238,12 +264,10 @@ export function TypingArea({ text, mode, onFinish }: Props) {
     }
   }
 
-  // Click to focus
   const handleContainerClick = () => {
     inputRef.current?.focus()
   }
 
-  // Click on a character to move cursor there
   const handleCharClick = useCallback((index: number) => {
     setIndex(index)
     inputRef.current?.focus()
@@ -251,13 +275,26 @@ export function TypingArea({ text, mode, onFinish }: Props) {
 
   // Memoize rendered characters
   const renderedChars = useMemo(() => {
-    return text.split('').map((char, index) => {
+    const prevChar = state.currentIndex > 0 ? text[state.currentIndex - 1] : null
+    // Use inline cursor when previous char is newline or at start — avoids cursor stuck at end of previous line
+    const useInlineCursor = state.currentIndex === 0 || prevChar === '\n'
+
+    const result: React.ReactNode[] = []
+
+    // Insert inline cursor at the very start
+    if (useInlineCursor && state.currentIndex === 0 && text.length > 0) {
+      result.push(
+        <span key="cursor-start" className="char-cursor-inline" />
+      )
+    }
+
+    text.split('').forEach((char, index) => {
       const charState = state.charStates[index]
       const typedChar = state.typedChars[index]
-      const isCurrent = index === state.currentIndex
+      // Cursor on last typed char (right side) — but not when previous char was \n (handled by inline cursor below)
+      const hasCursor = index === state.currentIndex - 1 && state.currentIndex > 0 && !useInlineCursor
       const isCode = mode === 'code'
 
-      // For error state, show the typed character (in red)
       const displayChar = charState === 'error' && typedChar ? typedChar : char
 
       const style: React.CSSProperties = {
@@ -274,25 +311,31 @@ export function TypingArea({ text, mode, onFinish }: Props) {
       }
 
       if (char === '\n') {
-        return (
+        result.push(
           <span
             key={index}
             data-char-index={index}
-            style={style}
-            className={`inline cursor-pointer ${isCurrent ? 'char-cursor' : ''}`}
+            style={{ ...style, display: 'block', height: '1em' }}
+            className={`cursor-pointer ${hasCursor ? 'char-cursor' : ''}`}
             onClick={(e) => { e.stopPropagation(); handleCharClick(index); }}
           >
             <span style={{ color: 'var(--text-muted)', fontSize: '0.7em', userSelect: 'none' }}>↵</span>
-            <br />
           </span>
         )
+        // Insert inline cursor right after \n when cursor is at start of next line
+        if (useInlineCursor && index + 1 === state.currentIndex) {
+          result.push(
+            <span key={`cursor-${index}`} className="char-cursor-inline" />
+          )
+        }
+        return
       }
 
-      return (
+      result.push(
         <span
           key={index}
           data-char-index={index}
-          className={`inline-block cursor-pointer ${isCurrent ? 'char-cursor' : ''}`}
+          className={`inline-block cursor-pointer ${hasCursor ? 'char-cursor' : ''}`}
           style={style}
           onClick={(e) => { e.stopPropagation(); handleCharClick(index); }}
         >
@@ -300,7 +343,9 @@ export function TypingArea({ text, mode, onFinish }: Props) {
         </span>
       )
     })
-  }, [text, state.charStates, state.typedChars, state.currentIndex, mode])
+
+    return result
+  }, [text, state.charStates, state.typedChars, state.currentIndex, mode, fontSize, handleCharClick])
 
   return (
     <div className="space-y-4">
@@ -318,10 +363,8 @@ export function TypingArea({ text, mode, onFinish }: Props) {
           backgroundColor: 'var(--bg-secondary)',
           border: '1px solid var(--border)',
           minHeight: '200px',
-          maxHeight: '60vh',
         }}
       >
-        {/* Input for capturing keyboard/IME input - positioned at current char */}
         <input
           ref={inputRef}
           type="text"
@@ -337,7 +380,7 @@ export function TypingArea({ text, mode, onFinish }: Props) {
             top: '50%',
             left: '50%',
             zIndex: 9999,
-            fontSize: '16px', // Prevent iOS zoom
+            fontSize: '16px',
             caretColor: 'transparent',
             border: 'none',
             outline: 'none',
@@ -352,13 +395,22 @@ export function TypingArea({ text, mode, onFinish }: Props) {
         />
 
         <style>{`
-          .char-cursor::before {
+          .char-cursor::after {
             content: '';
             position: absolute;
-            left: -1px;
-            top: 2px;
-            bottom: 2px;
+            right: -1px;
+            top: 0;
+            bottom: 0;
             width: 2px;
+            background-color: var(--accent);
+            animation: blink 1s step-end infinite;
+          }
+          .char-cursor-inline {
+            display: inline-block;
+            position: relative;
+            width: 2px;
+            height: 1.2em;
+            vertical-align: text-bottom;
             background-color: var(--accent);
             animation: blink 1s step-end infinite;
           }
@@ -367,6 +419,13 @@ export function TypingArea({ text, mode, onFinish }: Props) {
             50% { opacity: 0; }
           }
         `}</style>
+
+        {state.status !== 'typing' && (
+          <div className="flex items-center justify-between text-xs px-6 py-3" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-light)' }}>
+            <span>点击开始输入 | ←→ 移动光标 | Home/End 跳转</span>
+            <span>{state.currentIndex} / {text.length} 字符</span>
+          </div>
+        )}
 
         <div
           ref={scrollContainerRef}
@@ -382,11 +441,6 @@ export function TypingArea({ text, mode, onFinish }: Props) {
         >
           {renderedChars}
         </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
-        <span>点击开始输入 | ←→ 移动光标 | Home/End 跳转</span>
-        <span>{state.currentIndex} / {text.length} 字符</span>
       </div>
     </div>
   )

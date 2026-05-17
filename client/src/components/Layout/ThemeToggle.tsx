@@ -6,20 +6,20 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="relative w-14 h-7 rounded-full transition-colors duration-300"
-      style={{ backgroundColor: theme === 'dark' ? 'var(--accent)' : 'var(--bg-tertiary)' }}
+      className="p-1.5 rounded-lg transition-colors"
+      style={{ color: 'var(--text-muted)' }}
       aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
     >
-      <span
-        className="absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300 flex items-center justify-center text-xs"
-        style={{
-          left: theme === 'dark' ? '30px' : '2px',
-          backgroundColor: 'var(--bg-primary)',
-          boxShadow: 'var(--shadow)',
-        }}
-      >
-        {theme === 'dark' ? '🌙' : '☀️'}
-      </span>
+      {theme === 'dark' ? (
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="9" cy="9" r="3.5" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M9 2v1.5M9 14.5V16M2 9h1.5M14.5 9H16M4.05 4.05l1.06 1.06M12.89 12.89l1.06 1.06M4.05 13.95l1.06-1.06M12.89 5.11l1.06-1.06" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M15.5 10.4A6.5 6.5 0 017.6 2.5 7 7 0 1015.5 10.4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      )}
     </button>
   )
 }

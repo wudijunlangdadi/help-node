@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { PracticeMode, TypingResult } from '../types'
 import { segmentText } from '../utils/segmentation'
+import type { SegmentResult as SavedSegmentResult } from './importStore'
 
 export interface SegmentResult {
   segmentIndex: number
@@ -21,6 +22,7 @@ interface SessionState {
 
   initSession: (text: string, mode: PracticeMode, articleId: string | null, articleTitle: string) => void
   resumeFromSegment: (index: number) => void
+  restoreSegmentResults: (saved: SavedSegmentResult[]) => void
   setImportId: (id: string) => void
   completeSegment: (result: TypingResult) => void
   resetSession: () => void
@@ -57,6 +59,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set((state) => ({
       currentSegmentIndex: Math.min(index, state.segments.length - 1),
     }))
+  },
+
+  restoreSegmentResults: (saved) => {
+    set((state) => {
+      const results: SegmentResult[] = saved.map((s) => ({
+        segmentIndex: s.segmentIndex,
+        text: state.segments[s.segmentIndex] ?? '',
+        result: s.result,
+        completedAt: s.completedAt,
+      }))
+      return { segmentResults: results }
+    })
   },
 
   setImportId: (id) => set({ importId: id }),
